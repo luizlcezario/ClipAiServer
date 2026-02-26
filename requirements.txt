@@ -1,14 +1,32 @@
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-python-multipart==0.0.6
-pydantic==2.5.0
-pydantic-settings==2.1.0
-sqlalchemy==2.0.23
+# Web Framework & API
+fastapi>=0.100.0
+uvicorn[standard]>=0.24.0
+python-multipart>=0.0.6
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+
+# Database
+sqlalchemy>=2.0.23
+
+# Video & Audio Processing
 clipsai>=0.2.1
+torch>=2.2.0
+torchaudio>=2.2.0
+torchvision>=0.17.0
+numpy>=2.1.0
+
+# WhisperX - Speech to Text
 whisperx @ git+https://github.com/m-bain/whisperx.git
-python-dotenv==1.0.0
-aiofiles==23.2.1
-requests==2.31.0
-pytest==7.4.3
-pytest-asyncio==0.21.1
-httpx==0.25.1
+
+# HTTP & Networking
+requests>=2.31.0
+aiohttp>=3.9.0
+httpx>=0.25.0
+
+# File Handling
+python-dotenv>=1.0.0
+aiofiles>=23.2.0
+
+# Testing
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
