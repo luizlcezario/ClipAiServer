@@ -7,6 +7,7 @@ library with WhisperX transcription and manages job status updates in the databa
 
 import logging
 import os
+import asyncio
 from typing import Optional, List
 from datetime import datetime
 from sqlalchemy.orm import Session
@@ -14,7 +15,7 @@ from sqlalchemy.orm import Session
 from app.models.clip_job import ClipJob, JobStatus
 from app.schemas.clip_request import ClipGenerationRequest
 from app.services.storage import StorageService
-from app.services.downloader import VideoDownloader
+from app.services.downloader import AsyncVideoDownloader
 
 logger = logging.getLogger(__name__)
 
@@ -87,25 +88,26 @@ class ClipGenerator:
         Note:
             This function updates the job status in the database throughout
             the generation process. Flow:
-            1. Download video if URL is provided
+            1. Download video if URL is provided (ASYNC - doesn't block)
             2. Transcribe video using ClipsAI Transcriber
             3. Find clips using ClipsAI ClipFinder based on transcription
             4. Trim video for each detected clip
             5. Save results to database
         """
-        downloader = VideoDownloader()
+        downloader = AsyncVideoDownloader()
         video_path = request.video_path
         
         try:
-            # Step 0: Download video if URL is provided
+            # Step 0: Download video if URL is provided (ASYNC - NON-BLOCKING)
             if downloader.is_url(video_path):
                 self._update_job_status(job_id, JobStatus.PROCESSING, "Baixando vídeo da web...")
-                logger.info(f"Downloading video from URL for job {job_id}: {video_path}")
+                logger.info(f"Starting async download for job {job_id}: {video_path}")
                 
                 try:
-                    video_path = downloader.download_video(
+                    # Async download - will not block the POST request
+                    video_path = await downloader.download_video(
                         url=video_path,
-                        timeout=300,
+                        timeout=3600,  # 1 hour timeout for download
                         max_size_mb=2048,
                     )
                     logger.info(f"Video downloaded successfully to: {video_path}")
