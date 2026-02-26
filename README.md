@@ -1,9 +1,10 @@
 # Clips AI Server
 
-A FastAPI-based server for generating video clips using ClipsAI library with WhisperX transcription.
+A FastAPI-based server for generating video clips using ClipsAI library with WhisperX transcription. Supports downloading videos directly from the web.
 
 ## Features
 
+- **Web Video Download** - Automatically download videos from HTTP/HTTPS URLs
 - **WhisperX Transcription** for accurate speech-to-text before clip detection
 - **Asynchronous clip generation** using FastAPI background tasks
 - **Multi-clip detection** automatically finds optimal clip segments
@@ -18,7 +19,9 @@ A FastAPI-based server for generating video clips using ClipsAI library with Whi
 ## How It Works
 
 ```
-Video Input
+Video Input (Local or URL)
+    ↓
+[VideoDownloader] - Download from web if URL provided
     ↓
 [WhisperX Transcription] - Converts audio to text
     ↓
@@ -49,6 +52,7 @@ ClipsAiServer/
 │   │   ├── __init__.py
 │   │   ├── clip_generator.py # Clip generation + transcription
 │   │   ├── transcriber.py   # WhisperX transcription service
+│   │   ├── downloader.py    # Video download service
 │   │   └── storage.py       # File storage operations
 │   └── api/                 # API routes
 │       ├── __init__.py
@@ -203,8 +207,12 @@ Response when failed:
 
 ## Processing Flow
 
+### Step 0: Download (if URL provided)
+If the `video_path` is an HTTP/HTTPS URL, the server downloads it to a temporary cache.
+Status: "processing" - "Baixando vídeo da web..."
+
 ### Step 1: Submit Video
-Submit a video file with `POST /api/clips/generate`. The job is queued with status "pending".
+Submit a video file path or URL with `POST /api/clips/generate`. The job is queued with status "pending".
 
 ### Step 2: Transcription
 The system transcribes the video using WhisperX to convert audio to text.
@@ -221,6 +229,91 @@ Status: "processing" - "Gerando N clips..."
 ### Step 5: Completion
 All clips are saved and metadata is stored in the database.
 Status: "completed" - "Concluído: N clips gerados"
+
+## Usage Examples
+
+### Example 1: Submit local video file
+```bash
+curl -X POST http://localhost:8000/api/clips/generate \
+  -H "Content-Type: application/json" \
+  -d '{"video_path": "/path/to/local/video.mp4"}'
+```
+
+### Example 2: Submit video URL (auto-download)
+```bash
+curl -X POST http://localhost:8000/api/clips/generate \
+  -H "Content-Type: application/json" \
+  -d '{"video_path": "https://example.com/video.mp4"}'
+```
+
+### Example 3: Python client with local video
+```python
+import requests
+import time
+
+# 1. Submit video for clip generation
+response = requests.post(
+    "http://localhost:8000/api/clips/generate",
+    json={"video_path": "/path/to/video.mp4"}
+)
+job_id = response.json()["job_id"]
+
+# 2. Poll for status
+while True:
+    status_response = requests.get(
+        f"http://localhost:8000/api/clips/status/{job_id}"
+    )
+    status_data = status_response.json()
+    
+    if status_data["status"] == "completed":
+        print(f"✓ Generated {len(status_data['generated_clips'])} clips")
+```
+
+### Example 4: Python client with URL (auto-download)
+```python
+import requests
+import time
+
+# 1. Submit video URL for clip generation (will auto-download)
+response = requests.post(
+    "http://localhost:8000/api/clips/generate",
+    json={"video_path": "https://example.com/myvideos/speech.mp4"}
+)
+job_id = response.json()["job_id"]
+print(f"Job submitted: {job_id}")
+
+# 2. Monitor progress with status messages
+while True:
+    status_response = requests.get(
+        f"http://localhost:8000/api/clips/status/{job_id}"
+    )
+    status_data = status_response.json()
+    
+    status = status_data["status"]
+    message = status_data.get("status_message", "")
+    
+    print(f"[{status}] {message}")
+    
+    if status == "completed":
+        print(f"✓ Generated {len(status_data['generated_clips'])} clips:")
+        for i, clip in enumerate(status_data['generated_clips'], 1):
+            print(f"  {i}. {clip['filename']} ({clip['duration']:.2f}s)")
+        break
+    elif status == "failed":
+        print(f"✗ Job failed: {status_data['error_message']}")
+        break
+    
+    time.sleep(5)
+```
+
+### Video Download Features
+
+- **Automatic format detection**: Determines file type from Content-Type header
+- **Resume support**: Compatible with servers that support range requests
+- **File size validation**: Prevents downloading files > 2GB (configurable)
+- **Timeout protection**: 5-minute default timeout per download (configurable)
+- **Automatic cleanup**: Old cached videos cleaned up after 24 hours
+- **User-Agent handling**: Proper browser-like headers for compatibility
 
 ## Usage Example
 

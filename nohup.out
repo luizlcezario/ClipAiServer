@@ -1,0 +1,17 @@
+/home/lcezario/code/ClipsAiServer/venv/lib/python3.10/site-packages/torch/cuda/__init__.py:54: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+Disabling PyTorch because PyTorch >= 2.4 is required but found 2.2.2
+PyTorch was not found. Models won't be available and only tokenizers, configuration and file/data utilities can be used.
+ClipsAI not fully available: name 'nn' is not defined. Using mock implementation.
+2026-02-26 15:39:10,757 - app.main - INFO - FastAPI application initialized successfully
+INFO:     Started server process [343635]
+INFO:     Waiting for application startup.
+2026-02-26 15:39:10,758 - app.main - INFO - Starting Clips AI Server...
+2026-02-26 15:39:10,762 - app.main - INFO - Database initialized successfully
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+2026-02-26 15:39:12,470 - app.main - INFO - Shutting down Clips AI Server...
+INFO:     Application shutdown complete.
+INFO:     Finished server process [343635]
