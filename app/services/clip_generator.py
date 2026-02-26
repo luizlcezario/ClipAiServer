@@ -18,7 +18,7 @@ Clean Architecture:
 import logging
 import os
 import asyncio
-from typing import List
+from typing import List, Optional
 from datetime import datetime
 from sqlalchemy.orm import Session
 
@@ -269,6 +269,8 @@ class ClipGenerator:
                 continue
 
         return generated_clips
+
+    def _update_job_status(self, job_id: str, status: JobStatus, message: str = "") -> None:
         """
         Update job status in database.
 
