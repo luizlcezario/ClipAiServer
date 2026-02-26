@@ -2,7 +2,7 @@
 API route handlers for clip generation endpoints.
 
 This module defines the FastAPI endpoints for submitting clip generation
-jobs and checking job status.
+jobs and checking job status with WhisperX transcription support.
 """
 
 import uuid
@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.clip_job import ClipJob, JobStatus
 from app.schemas.clip_request import ClipGenerationRequest
-from app.schemas.clip_response import ClipGenerationResponse, JobStatusResponse
+from app.schemas.clip_response import ClipGenerationResponse, JobStatusResponse, ClipMetadata
 from app.services.clip_generator import ClipGenerator
 
 logger = logging.getLogger(__name__)
@@ -26,8 +26,8 @@ router = APIRouter(prefix="/api/clips", tags=["clips"])
     "/generate",
     response_model=ClipGenerationResponse,
     status_code=status.HTTP_202_ACCEPTED,
-    summary="Generate a new clip",
-    description="Submit a clip generation job. Returns immediately with a job ID."
+    summary="Generate clips from video",
+    description="Submit a clip generation job with WhisperX transcription. Returns immediately with a job ID."
 )
 async def generate_clip(
     request: ClipGenerationRequest,
@@ -37,12 +37,13 @@ async def generate_clip(
     """
     Submit a clip generation job.
 
-    This endpoint accepts a clip generation request and queues it for
-    asynchronous processing. Returns immediately with a job ID that can be
-    used to check the status of the clip generation.
+    This endpoint accepts a video file and submits it for asynchronous
+    clip generation using WhisperX transcription and ClipsAI clip detection.
+    Returns immediately with a job ID that can be used to check the status
+    and retrieve generated clips.
 
     Args:
-        request: Clip generation request parameters
+        request: Clip generation request parameters (video path, etc.)
         background_tasks: FastAPI background tasks for async processing
         db: Database session dependency
 
@@ -61,6 +62,7 @@ async def generate_clip(
             job_id=job_id,
             status=JobStatus.PENDING,
             input_file=request.video_path,
+            status_message="Aguardando processamento",
         )
         db.add(clip_job)
         db.commit()
@@ -75,7 +77,7 @@ async def generate_clip(
         return ClipGenerationResponse(
             job_id=job_id,
             status=JobStatus.PENDING.value,
-            message="Clip generation job queued successfully",
+            message="Clip generation job queued successfully. Use /status/{job_id} to check progress.",
         )
 
     except Exception as e:
@@ -99,6 +101,13 @@ async def get_job_status(
     """
     Get the status of a clip generation job.
 
+    Provides detailed information about job progress, including:
+    - Current status (pending, processing, completed, failed)
+    - Detailed status message showing current step
+    - Generated clips metadata (when completed)
+    - Error details (if failed)
+    - Timestamps for creation, update, and completion
+
     Args:
         job_id: The unique job identifier returned from the generate endpoint
         db: Database session dependency
@@ -119,10 +128,19 @@ async def get_job_status(
                 detail=f"Job {job_id} not found",
             )
 
+        # Convert generated_clips to ClipMetadata objects if present
+        generated_clips = None
+        if job.generated_clips:
+            generated_clips = [
+                ClipMetadata(**clip) if isinstance(clip, dict) else clip
+                for clip in (job.generated_clips if isinstance(job.generated_clips, list) else [])
+            ]
+
         return JobStatusResponse(
             job_id=job.job_id,
             status=job.status.value,
-            output_file=job.output_file,
+            status_message=job.status_message,
+            generated_clips=generated_clips,
             error_message=job.error_message,
             created_at=job.created_at,
             updated_at=job.updated_at,

@@ -1,15 +1,33 @@
 # Clips AI Server
 
-A FastAPI-based server for generating video clips using the clipsai library.
+A FastAPI-based server for generating video clips using ClipsAI library with WhisperX transcription.
 
 ## Features
 
+- **WhisperX Transcription** for accurate speech-to-text before clip detection
 - **Asynchronous clip generation** using FastAPI background tasks
+- **Multi-clip detection** automatically finds optimal clip segments
 - **Database tracking** of clip generation jobs with SQLAlchemy ORM
 - **File storage management** for uploads and outputs
 - **Type-safe schemas** with Pydantic
 - **Environment configuration** with .env file support
 - **RESTful API** with comprehensive error handling
+- **Progress tracking** with detailed status messages
+- **Clip metadata** including start/end times and durations
+
+## How It Works
+
+```
+Video Input
+    ↓
+[WhisperX Transcription] - Converts audio to text
+    ↓
+[ClipsAI ClipFinder] - Detects optimal clip segments from transcription
+    ↓
+[MediaEditor] - Trims video at detected clip boundaries
+    ↓
+Generated Clips (output)
+```
 
 ## Project Structure
 
@@ -22,14 +40,15 @@ ClipsAiServer/
 │   ├── database.py          # Database configuration
 │   ├── models/              # SQLAlchemy models
 │   │   ├── __init__.py
-│   │   └── clip_job.py      # ClipJob model
+│   │   └── clip_job.py      # ClipJob model with clip metadata
 │   ├── schemas/             # Pydantic schemas
 │   │   ├── __init__.py
 │   │   ├── clip_request.py  # Request schemas
 │   │   └── clip_response.py # Response schemas
 │   ├── services/            # Business logic
 │   │   ├── __init__.py
-│   │   ├── clip_generator.py # Clip generation logic
+│   │   ├── clip_generator.py # Clip generation + transcription
+│   │   ├── transcriber.py   # WhisperX transcription service
 │   │   └── storage.py       # File storage operations
 │   └── api/                 # API routes
 │       ├── __init__.py
@@ -100,11 +119,7 @@ Content-Type: application/json
 
 {
   "video_path": "/path/to/video.mp4",
-  "start_time": 10.5,
-  "end_time": 45.2,
-  "title": "Awesome Moment",
-  "description": "A great clip from the video",
-  "tags": ["gaming", "highlight"]
+  "description": "Generate clips from this video"
 }
 ```
 
@@ -112,8 +127,8 @@ Response (HTTP 202 Accepted):
 ```json
 {
   "job_id": "550e8400-e29b-41d4-a716-446655440000",
-  "status": "pending",
-  "message": "Clip generation job queued successfully"
+  "status": "processing",
+  "message": "Clip generation job queued successfully. Use /status/{job_id} to check progress."
 }
 ```
 
@@ -122,13 +137,123 @@ Response (HTTP 202 Accepted):
 GET /api/clips/status/{job_id}
 ```
 
-Response:
+Response when processing:
+```json
+{
+  "job_id": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "processing",
+  "status_message": "Detectando clips...",
+  "generated_clips": null,
+  "error_message": null,
+  "created_at": "2026-02-26T10:00:00",
+  "updated_at": "2026-02-26T10:00:05",
+  "completed_at": null
+}
+```
+
+Response when completed:
 ```json
 {
   "job_id": "550e8400-e29b-41d4-a716-446655440000",
   "status": "completed",
-  "output_file": "/path/to/clip.mp4",
+  "status_message": "Concluído: 3 clips gerados",
+  "generated_clips": [
+    {
+      "filename": "clip_550e8400-e29b-41d4-a716-446655440000_001.mp4",
+      "path": "/clips_output/550e8400-e29b-41d4-a716-446655440000/clip_550e8400-e29b-41d4-a716-446655440000_001.mp4",
+      "start_time": 0.0,
+      "end_time": 5.5,
+      "duration": 5.5
+    },
+    {
+      "filename": "clip_550e8400-e29b-41d4-a716-446655440000_002.mp4",
+      "path": "/clips_output/550e8400-e29b-41d4-a716-446655440000/clip_550e8400-e29b-41d4-a716-446655440000_002.mp4",
+      "start_time": 15.2,
+      "end_time": 22.8,
+      "duration": 7.6
+    },
+    {
+      "filename": "clip_550e8400-e29b-41d4-a716-446655440000_003.mp4",
+      "path": "/clips_output/550e8400-e29b-41d4-a716-446655440000/clip_550e8400-e29b-41d4-a716-446655440000_003.mp4",
+      "start_time": 30.1,
+      "end_time": 38.9,
+      "duration": 8.8
+    }
+  ],
   "error_message": null,
+  "created_at": "2026-02-26T10:00:00",
+  "updated_at": "2026-02-26T10:02:30",
+  "completed_at": "2026-02-26T10:02:30"
+}
+```
+
+Response when failed:
+```json
+{
+  "job_id": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "failed",
+  "status_message": "Erro: File not found",
+  "generated_clips": null,
+  "error_message": "File not found",
+  "created_at": "2026-02-26T10:00:00",
+  "updated_at": "2026-02-26T10:00:05",
+  "completed_at": "2026-02-26T10:00:05"
+}
+```
+
+## Processing Flow
+
+### Step 1: Submit Video
+Submit a video file with `POST /api/clips/generate`. The job is queued with status "pending".
+
+### Step 2: Transcription
+The system transcribes the video using WhisperX to convert audio to text.
+Status: "processing" - "Transcrevendo vídeo..."
+
+### Step 3: Clip Detection
+ClipsAI analyzes the transcription to automatically detect optimal clip segments.
+Status: "processing" - "Detectando clips..."
+
+### Step 4: Video Trimming
+Video is trimmed at the detected clip boundaries to generate final output files.
+Status: "processing" - "Gerando N clips..."
+
+### Step 5: Completion
+All clips are saved and metadata is stored in the database.
+Status: "completed" - "Concluído: N clips gerados"
+
+## Usage Example
+
+```python
+import requests
+import time
+
+# 1. Submit video for clip generation
+response = requests.post(
+    "http://localhost:8000/api/clips/generate",
+    json={"video_path": "/path/to/video.mp4"}
+)
+job_id = response.json()["job_id"]
+
+# 2. Poll for status
+while True:
+    status_response = requests.get(
+        f"http://localhost:8000/api/clips/status/{job_id}"
+    )
+    status_data = status_response.json()
+    
+    if status_data["status"] == "completed":
+        print(f"✓ Generated {len(status_data['generated_clips'])} clips")
+        for clip in status_data["generated_clips"]:
+            print(f"  - {clip['filename']}: {clip['duration']:.2f}s")
+        break
+    elif status_data["status"] == "failed":
+        print(f"✗ Job failed: {status_data['error_message']}")
+        break
+    else:
+        print(f"Processing: {status_data['status_message']}")
+        time.sleep(5)
+```
   "created_at": "2024-02-26T10:30:00",
   "updated_at": "2024-02-26T10:35:00",
   "completed_at": "2024-02-26T10:35:00"
@@ -147,22 +272,32 @@ Environment variables in `.env`:
 ## Database Models
 
 ### ClipJob
-Tracks the status of clip generation jobs:
+Tracks the status of clip generation jobs with transcription:
 - `id` - Primary key
 - `job_id` - Unique UUID identifier
 - `status` - Job status (pending, processing, completed, failed)
 - `input_file` - Path to input video
-- `output_file` - Path to generated clip
+- `status_message` - Detailed progress message
+- `generated_clips` - JSON array of clip metadata (filename, path, start_time, end_time, duration)
 - `error_message` - Error details if job failed
 - `created_at`, `updated_at`, `completed_at` - Timestamps
 
 ## Services
 
 ### ClipGenerator
-Handles clip generation using the clipsai library:
+Handles clip generation with WhisperX transcription:
+- Transcribes video using WhisperX
+- Detects clip segments using ClipsAI
+- Trims video at detected boundaries
 - Manages job status updates
-- Processes videos with clipsai
 - Error handling and logging
+
+### TranscriberService
+Manages WhisperX transcription:
+- Loads and caches the Whisper model
+- Handles audio/video transcription
+- Supports language selection
+- GPU/CPU device management
 
 ### StorageService
 Manages file operations:
