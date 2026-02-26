@@ -15,7 +15,9 @@ torchaudio>=2.2.0
 torchvision>=0.17.0
 numpy>=2.1.0
 
-# WhisperX - Speech to Text
+# WhisperX - Speech to Text with FFmpeg support
+# Note: FFmpeg must be installed system-wide (apt install ffmpeg on Linux)
+# torchcodec is incompatible with PyTorch 2.8.0, so it's excluded
 whisperx @ git+https://github.com/m-bain/whisperx.git
 
 # HTTP & Networking
